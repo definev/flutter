@@ -1410,10 +1410,16 @@ class TextPainter {
   /// Returns the closest offset after `offset` at which the input cursor can be
   /// positioned.
   int? getOffsetAfter(int offset) {
-    final int? nextCodeUnit = _text!.codeUnitAt(offset);
-    if (nextCodeUnit == null) {
+    // Index into the cached [plainText] (O(1)) rather than walking the span
+    // tree on every caret movement. The two agree code-unit-for-code-unit: a
+    // PlaceholderSpan/WidgetSpan contributes a single 0xFFFC object replacement
+    // character to both. plainText.codeUnitAt throws out of bounds where the
+    // span walk returned null, so the bounds are checked explicitly.
+    final String text = plainText;
+    if (offset < 0 || offset >= text.length) {
       return null;
     }
+    final int nextCodeUnit = text.codeUnitAt(offset);
     // TODO(goderbauer): doesn't handle extended grapheme clusters with more than one Unicode scalar value (https://github.com/flutter/flutter/issues/13404).
     return isHighSurrogate(nextCodeUnit) ? offset + 2 : offset + 1;
   }
@@ -1421,10 +1427,14 @@ class TextPainter {
   /// Returns the closest offset before `offset` at which the input cursor can
   /// be positioned.
   int? getOffsetBefore(int offset) {
-    final int? prevCodeUnit = _text!.codeUnitAt(offset - 1);
-    if (prevCodeUnit == null) {
+    // See [getOffsetAfter]: index into the cached [plainText] instead of
+    // walking the span tree.
+    final int index = offset - 1;
+    final String text = plainText;
+    if (index < 0 || index >= text.length) {
       return null;
     }
+    final int prevCodeUnit = text.codeUnitAt(index);
     // TODO(goderbauer): doesn't handle extended grapheme clusters with more than one Unicode scalar value (https://github.com/flutter/flutter/issues/13404).
     return isLowSurrogate(prevCodeUnit) ? offset - 2 : offset - 1;
   }
