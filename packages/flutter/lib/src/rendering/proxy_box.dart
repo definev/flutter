@@ -4801,12 +4801,16 @@ class RenderAnnotatedRegion<T extends Object> extends RenderProxyBox {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    // Annotated region layers are not retained because they do not create engine layers.
-    final layer = AnnotatedRegionLayer<T>(
-      value,
-      size: sized ? size : null,
-      offset: sized ? offset : null,
-    );
+    // Reuse the AnnotatedRegionLayer across paints, mutating its fields instead
+    // of allocating a fresh layer each time. The layer creates no engine layer,
+    // so its fields only feed Layer.find (read live during the search); the
+    // mutable setters still mark it for recompositing for correctness.
+    final AnnotatedRegionLayer<T> layer =
+        _layerHandle.layer ?? AnnotatedRegionLayer<T>(value);
+    layer
+      ..value = value
+      ..size = sized ? size : null
+      ..offset = sized ? offset : Offset.zero;
     _layerHandle.layer = layer;
     context.pushLayer(layer, super.paint, offset);
   }

@@ -2926,12 +2926,24 @@ class FollowerLayer extends ContainerLayer {
 /// if [opaque] is true and the layer's annotation is added.
 class AnnotatedRegionLayer<T extends Object> extends ContainerLayer {
   /// Creates a new layer that annotates its children with [value].
-  AnnotatedRegionLayer(this.value, {this.size, Offset? offset, this.opaque = false})
-    : offset = offset ?? Offset.zero;
+  AnnotatedRegionLayer(T value, {Size? size, Offset? offset, this.opaque = false})
+    : _value = value,
+      _size = size,
+      _offset = offset ?? Offset.zero;
 
   /// The annotated object, which is added to the result if all restrictions are
   /// met.
-  final T value;
+  ///
+  /// The scene must be explicitly recomposited after this property is changed
+  /// (as described at [Layer]).
+  T get value => _value;
+  T _value;
+  set value(T value) {
+    if (value != _value) {
+      _value = value;
+      markNeedsAddToScene();
+    }
+  }
 
   /// The size of the annotated object.
   ///
@@ -2939,7 +2951,17 @@ class AnnotatedRegionLayer<T extends Object> extends ContainerLayer {
   /// position is contained by the rectangle formed by [size] and [offset].
   /// Otherwise no such restriction is applied, and clipping can only be done by
   /// the ancestor layers.
-  final Size? size;
+  ///
+  /// The scene must be explicitly recomposited after this property is changed
+  /// (as described at [Layer]).
+  Size? get size => _size;
+  Size? _size;
+  set size(Size? value) {
+    if (value != _size) {
+      _size = value;
+      markNeedsAddToScene();
+    }
+  }
 
   /// The position of the annotated object.
   ///
@@ -2948,7 +2970,17 @@ class AnnotatedRegionLayer<T extends Object> extends ContainerLayer {
   ///
   /// The [offset] only offsets the clipping rectangle, and does not affect
   /// how the painting or annotation search is propagated to its children.
-  final Offset offset;
+  ///
+  /// The scene must be explicitly recomposited after this property is changed
+  /// (as described at [Layer]).
+  Offset get offset => _offset;
+  Offset _offset;
+  set offset(Offset value) {
+    if (value != _offset) {
+      _offset = value;
+      markNeedsAddToScene();
+    }
+  }
 
   /// Whether the annotation of this layer should be opaque during an annotation
   /// search of type `T`, preventing siblings visually behind it from being
