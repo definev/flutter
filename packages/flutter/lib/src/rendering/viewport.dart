@@ -1407,24 +1407,21 @@ abstract class RenderViewportBase<ParentDataClass extends ContainerParentDataMix
     };
   }
 
-  Iterable<RenderSliver> get _childrenLastToFirst {
-    final children = <RenderSliver>[];
-    RenderSliver? child = lastChild;
-    while (child != null) {
-      children.add(child);
-      child = childBefore(child);
+  // Lazy generators: walking the child linked list on demand avoids
+  // materializing a List on every paint, hit-test, and semantics walk (the
+  // hit-test caller also stops early on the first hit). These back the
+  // [childrenInPaintOrder] / [childrenInHitTestOrder] getters, so subclasses
+  // overriding those getters still control the order.
+  Iterable<RenderSliver> get _childrenLastToFirst sync* {
+    for (RenderSliver? child = lastChild; child != null; child = childBefore(child)) {
+      yield child;
     }
-    return children;
   }
 
-  Iterable<RenderSliver> get _childrenFirstToLast {
-    final children = <RenderSliver>[];
-    RenderSliver? child = firstChild;
-    while (child != null) {
-      children.add(child);
-      child = childAfter(child);
+  Iterable<RenderSliver> get _childrenFirstToLast sync* {
+    for (RenderSliver? child = firstChild; child != null; child = childAfter(child)) {
+      yield child;
     }
-    return children;
   }
 
   @override
