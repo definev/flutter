@@ -1256,17 +1256,22 @@ mixin SchedulerBinding on BindingBase {
       // TRANSIENT FRAME CALLBACKS
       _frameTimelineTask?.start('Animate');
       _schedulerPhase = SchedulerPhase.transientCallbacks;
-      final Map<int, _FrameCallbackEntry> callbacks = _transientCallbacks;
-      _transientCallbacks = <int, _FrameCallbackEntry>{};
-      callbacks.forEach((int id, _FrameCallbackEntry callbackEntry) {
-        if (!_removedIds.contains(id)) {
-          _invokeFrameCallback(
-            callbackEntry.callback,
-            _currentFrameTimeStamp!,
-            callbackEntry.debugStack,
-          );
-        }
-      });
+      if (_transientCallbacks.isNotEmpty) {
+        final Map<int, _FrameCallbackEntry> callbacks = _transientCallbacks;
+        _transientCallbacks = <int, _FrameCallbackEntry>{};
+        callbacks.forEach((int id, _FrameCallbackEntry callbackEntry) {
+          if (!_removedIds.contains(id)) {
+            _invokeFrameCallback(
+              callbackEntry.callback,
+              _currentFrameTimeStamp!,
+              callbackEntry.debugStack,
+            );
+          }
+        });
+      }
+      // Always clear, even when there were no transient callbacks: a callback
+      // can be scheduled and then cancelled before the frame, leaving ids here
+      // while _transientCallbacks is already empty.
       _removedIds.clear();
     } finally {
       _schedulerPhase = SchedulerPhase.midFrameMicrotasks;
@@ -1341,24 +1346,31 @@ mixin SchedulerBinding on BindingBase {
     try {
       // PERSISTENT FRAME CALLBACKS
       _schedulerPhase = SchedulerPhase.persistentCallbacks;
-      for (final callback in List<FrameCallback>.of(_persistentCallbacks)) {
-        _invokeFrameCallback(callback, _currentFrameTimeStamp!);
+      // _persistentCallbacks is append-only (there is no API to remove a
+      // persistent callback), so iterate it by index without copying. Capture
+      // the length so that callbacks registered during the loop run on the next
+      // frame, matching the previous snapshot behavior.
+      final int persistentCallbackCount = _persistentCallbacks.length;
+      for (var i = 0; i < persistentCallbackCount; i++) {
+        _invokeFrameCallback(_persistentCallbacks[i], _currentFrameTimeStamp!);
       }
 
       // POST-FRAME CALLBACKS
       _schedulerPhase = SchedulerPhase.postFrameCallbacks;
-      final localPostFrameCallbacks = List<FrameCallback>.of(_postFrameCallbacks);
-      _postFrameCallbacks.clear();
-      if (!kReleaseMode) {
-        FlutterTimeline.startSync('POST_FRAME');
-      }
-      try {
-        for (final callback in localPostFrameCallbacks) {
-          _invokeFrameCallback(callback, _currentFrameTimeStamp!);
-        }
-      } finally {
+      if (_postFrameCallbacks.isNotEmpty) {
+        final localPostFrameCallbacks = List<FrameCallback>.of(_postFrameCallbacks);
+        _postFrameCallbacks.clear();
         if (!kReleaseMode) {
-          FlutterTimeline.finishSync();
+          FlutterTimeline.startSync('POST_FRAME');
+        }
+        try {
+          for (final callback in localPostFrameCallbacks) {
+            _invokeFrameCallback(callback, _currentFrameTimeStamp!);
+          }
+        } finally {
+          if (!kReleaseMode) {
+            FlutterTimeline.finishSync();
+          }
         }
       }
     } finally {
