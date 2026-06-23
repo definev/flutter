@@ -4070,8 +4070,17 @@ class SemanticsNode with DiagnosticableTreeMixin {
     // be traversed.
     bool shouldNotSkipInHitTest(SemanticsNode child) {
       if (child._isTraversalChild) {
+        // child._isTraversalChild guarantees child._traversalChildIdentifier is
+        // non-null, so the raw getter equals getSemanticsData()'s value here:
+        // the merge in _getSemanticsForParent only fills traversalChildIdentifier
+        // via `??=` when the node's own identifier is null. Reading the raw field
+        // avoids building a full merged SemanticsData just for this one value.
+        // Do NOT generalize this to merge-roots, where getSemanticsData() can
+        // surface a descendant's identifier that the raw field does not (see the
+        // distinction between `data.traversalChildIdentifier` and the raw
+        // `traversalChildIdentifier` in _getSemanticsForParent below).
         final SemanticsNode? traversalParent =
-            owner!._traversalParentNodes[child.getSemanticsData().traversalChildIdentifier];
+            owner!._traversalParentNodes[child.traversalChildIdentifier];
         return traversalParent != null;
       }
       return true;
@@ -4225,8 +4234,12 @@ class SemanticsNode with DiagnosticableTreeMixin {
         // A corner case is the traversal parent of the traversal child, in paint
         // order, is the child of the traversal child. In this case, no grafting
         // needed, otherwise, it will cause infinite loop.
+        // child._isTraversalChild guarantees a non-null raw identifier, so the
+        // raw getter matches getSemanticsData()'s merged value here (see the
+        // note in the hit-test sibling above). Avoids materializing a full
+        // SemanticsData just to read traversalChildIdentifier.
         SemanticsNode? traversalParent =
-            owner!._traversalParentNodes[child.getSemanticsData().traversalChildIdentifier];
+            owner!._traversalParentNodes[child.traversalChildIdentifier];
         final int? traversalParentId = traversalParent?.id;
         while (traversalParent != null) {
           if (traversalParent == child) {
@@ -4997,14 +5010,18 @@ class SemanticsOwner extends ChangeNotifier {
           }
         }
 
-        // Clean up the dirty entry in owner._traversalParentNodes map because it
-        // will be updated later.
-        _traversalParentNodes.removeWhere((Object key, SemanticsNode oldNode) => node == oldNode);
-        // Clean up the node from the value set in owner._traversalChildNodes.
-        for (final Set<SemanticsNode> childSet in _traversalChildNodes.values) {
-          childSet.removeWhere((SemanticsNode oldNode) => node == oldNode);
+        // Clean up the dirty entry in the traversal maps because it will be
+        // updated later. These maps are only populated when traversal overrides
+        // (e.g. OverlayPortal) are in use; skip the per-dirty-node removeWhere
+        // closures entirely in the common case where both maps are empty.
+        if (_traversalParentNodes.isNotEmpty || _traversalChildNodes.isNotEmpty) {
+          _traversalParentNodes.removeWhere((Object key, SemanticsNode oldNode) => node == oldNode);
+          // Clean up the node from the value set in _traversalChildNodes.
+          for (final Set<SemanticsNode> childSet in _traversalChildNodes.values) {
+            childSet.removeWhere((SemanticsNode oldNode) => node == oldNode);
+          }
+          _traversalChildNodes.removeWhere((Object key, Set<SemanticsNode> value) => value.isEmpty);
         }
-        _traversalChildNodes.removeWhere((Object key, Set<SemanticsNode> value) => value.isEmpty);
         final bool isTraversalParent = node._isTraversalParent;
         final bool isTraversalChild = node._isTraversalChild;
 
